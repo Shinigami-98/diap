@@ -2,6 +2,7 @@ import joblib
 import os
 import json
 import numpy as np
+import subprocess
 
 MODEL_NAMES = [
     "Random Forest",
@@ -26,22 +27,45 @@ FEATURES = [
     "Age",
 ]
 
-# Load models and accuracies once
+def check_and_train_models():
+    """Check if models exist, if not trigger training"""
+    model_path = f"models/{MODEL_NAMES[0].replace(' ', '_')}_best.joblib"
+    if not os.path.exists(model_path):
+        print("Models not found. Starting initial training...")
+        subprocess.run(["python3", "train_backend.py"], check=True)
+        print("Initial training complete!")
+
+# Load models and accuracies
 models = {}
-for name in MODEL_NAMES:
-    model_path = f"models/{name.replace(' ', '_')}_best.joblib"
-    if os.path.exists(model_path):
-        models[name] = joblib.load(model_path)
-    else:
-        models[name] = None
-
-# Load best accuracies
 best_accuracies = {}
-acc_path = "models/best_accuracies.json"
-if os.path.exists(acc_path):
-    with open(acc_path, "r") as f:
-        best_accuracies = json.load(f)
 
+def load_models():
+    """Load all models and accuracies"""
+    global models, best_accuracies
+    
+    # Check if models need training
+    check_and_train_models()
+    
+    # Load models
+    for name in MODEL_NAMES:
+        model_path = f"models/{name.replace(' ', '_')}_best.joblib"
+        try:
+            models[name] = joblib.load(model_path)
+        except Exception as e:
+            print(f"Error loading model {name}: {e}")
+            models[name] = None
+
+    # Load best accuracies
+    acc_path = "models/best_accuracies.json"
+    try:
+        with open(acc_path, "r") as f:
+            best_accuracies = json.load(f)
+    except Exception as e:
+        print(f"Error loading accuracies: {e}")
+        best_accuracies = {}
+
+# Initialize models on module import
+load_models()
 
 def predict_all(user_input_df):
     """
