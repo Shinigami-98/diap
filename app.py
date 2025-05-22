@@ -3,6 +3,7 @@ import numpy as np
 import subprocess
 from predictor import predict_all, FEATURES, load_models
 import pandas as pd
+import os
 
 # Initialize session state for first run
 if 'initial_load' not in st.session_state:
@@ -10,24 +11,6 @@ if 'initial_load' not in st.session_state:
 
 st.set_page_config(page_title="Diabetes Prediction App", layout="wide")
 st.title("Diabetes Prediction (All Models)")
-
-# Show initial loading message if this is the first run
-if st.session_state.initial_load:
-    with st.status("Initial Setup", expanded=True) as status:
-        st.write("First time setup in progress...")
-        st.write("This may take a few minutes as we train the models.")
-        st.write("Please wait while we prepare everything for you.")
-        
-        try:
-            # Load models (this will trigger training if needed)
-            load_models()
-            status.update(label="Setup Complete!", state="complete")
-            st.session_state.initial_load = False
-            st.rerun()
-        except Exception as e:
-            status.update(label="Setup Failed!", state="error")
-            st.error(f"Error during initial setup: {str(e)}")
-            st.stop()
 
 # Sidebar for input
 st.sidebar.header("Input Features")
@@ -55,22 +38,42 @@ for name in FEATURES:
     else:
         user_input[name] = st.sidebar.number_input(name, min_value=min_val, max_value=max_val, value=default, step=1)
 
-# Button to retrain models
-if st.sidebar.button("Retrain Models (Backend)"):
-    with st.status("Retraining Models", expanded=True) as status:
-        st.write("Retraining models. This may take a while...")
+# Function to retrain models
+def retrain_models():
+    with st.spinner("Retraining models. This may take a while..."):
         try:
             result = subprocess.run(["python3", "train_backend.py"], capture_output=True, text=True, check=True)
-            status.update(label="Retraining Complete!", state="complete")
-            # Reload models after retraining
             load_models()
-            st.rerun()
+            st.success("Models trained successfully!")
         except subprocess.CalledProcessError as e:
-            status.update(label="Retraining Failed!", state="error")
             st.error(f"Error during retraining: {e.stderr}")
+            st.stop()
+
+# Button to retrain models
+if st.sidebar.button("Retrain Models (Backend)"):
+    retrain_models()
+    st.rerun()
 
 # Main area: Predict
 st.header("Prediction Results")
+
+MODEL_FILES = [
+    f"models/{name.replace(' ', '_')}_best.joblib" for name in [
+        "Random Forest",
+        "Logistic Regression",
+        "XGBoost",
+        "KNN",
+        "Decision Tree",
+        "SGD",
+    ]
+]
+MODEL_FILES.append("models/best_accuracies.json")
+
+missing_models = [f for f in MODEL_FILES if not os.path.isfile(f)]
+
+if missing_models:
+    retrain_models()
+
 input_df = pd.DataFrame([user_input])  # Ensures feature names are present
 
 try:
